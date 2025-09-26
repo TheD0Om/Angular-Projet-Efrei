@@ -1,7 +1,7 @@
 // src/app/features/app/services/games.service.ts
 import { Injectable, signal } from '@angular/core';
 import { Observable, of, delay, throwError } from 'rxjs';
-import { Game, Platform } from '../models/game.model';
+import { Game } from '../models/game.model'; // <-- IMPORT DU MODELE UNIQUE
 
 const STORAGE_GAMES_KEY = 'bh_games_seed';
 
@@ -124,5 +124,3 @@ export class GamesService {
     this.persist();
   }
 }
-
-export type { Game, Platform }; // optionnel: re-export pratique

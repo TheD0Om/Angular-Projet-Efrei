@@ -1,9 +1,10 @@
+// src/app/features/admin/components/admin-games-page.component.ts
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
-import { AdminGamesStore } from '../data/admin-games.store';
-import { Game, Platform } from '../models/game.model';
+import { GamesService } from '../../app/services/games.service'; // même service que côté users
+import { Game, Platform } from '../../app/models/game.model';
 
 @Component({
   selector: 'app-admin-games-page',
@@ -26,7 +27,7 @@ import { Game, Platform } from '../models/game.model';
           <label class="text-sm font-medium">Plateforme</label>
           <select formControlName="platform" class="border rounded px-3 py-2">
             <option value="PC">PC</option>
-            <option value="PS5">PS5</option>
+            <option value="PlayStation">PlayStation</option>
             <option value="Xbox">Xbox</option>
             <option value="Switch">Switch</option>
           </select>
@@ -37,6 +38,22 @@ import { Game, Platform } from '../models/game.model';
           <input type="text" formControlName="genre" class="border rounded px-3 py-2" placeholder="Ex: Platformer" />
           @if (form.controls.genre.invalid && (form.controls.genre.dirty || form.controls.genre.touched)) {
             <small class="text-red-600">Genre requis</small>
+          }
+        </div>
+
+        <div class="grid gap-1">
+          <label class="text-sm font-medium">Prix (€)</label>
+          <input type="number" step="0.01" min="0" formControlName="price" class="border rounded px-3 py-2" />
+          @if (form.controls.price.invalid && (form.controls.price.dirty || form.controls.price.touched)) {
+            <small class="text-red-600">Prix valide requis</small>
+          }
+        </div>
+
+        <div class="grid gap-1">
+          <label class="text-sm font-medium">Description</label>
+          <textarea formControlName="description" rows="3" class="border rounded px-3 py-2" placeholder="Courte description..."></textarea>
+          @if (form.controls.description.invalid && (form.controls.description.dirty || form.controls.description.touched)) {
+            <small class="text-red-600">Description requise</small>
           }
         </div>
 
@@ -52,7 +69,7 @@ import { Game, Platform } from '../models/game.model';
             type="submit">
             {{ editingId() ? 'Mettre à jour' : 'Ajouter' }}
           </button>
-          @if (editingId()) {
+          @if (editingId() !== null) {
             <button type="button" class="px-4 py-2 rounded border" (click)="cancelEdit()">Annuler</button>
           }
         </div>
@@ -70,7 +87,7 @@ import { Game, Platform } from '../models/game.model';
               <div class="flex flex-col">
                 <span class="font-medium">{{ g.title }}</span>
                 <small class="text-gray-600">
-                  {{ g.platform }} • {{ g.genre }} • {{ g.releasedAt ?? 'N/C' }}
+                  {{ g.platform }} • {{ g.genre }} • {{ g.releasedAt ?? 'N/C' }} • {{ g.price | number:'1.2-2' }} €
                 </small>
               </div>
               <div class="flex gap-2">
@@ -86,21 +103,23 @@ import { Game, Platform } from '../models/game.model';
 })
 export class AdminGamesPageComponent {
   private readonly fb = inject(FormBuilder);
-  private readonly store = inject(AdminGamesStore);
+  private readonly gamesSvc = inject(GamesService);
 
-  // État liste
+  // Liste
   readonly games = signal<Game[]>([]);
   readonly count = computed(() => this.games().length);
 
   // Édition
-  readonly editingId = signal<string | null>(null);
+  readonly editingId = signal<number | null>(null);
 
-  // Reactive Form typé
+  // Form (releasedAt en string | undefined; description non-nullable dans le form)
   readonly form = this.fb.group({
-    title: this.fb.nonNullable.control<string>('', [Validators.required, Validators.minLength(2)]),
-    platform: this.fb.nonNullable.control<Platform>('PC', [Validators.required]),
-    genre: this.fb.nonNullable.control<string>('', [Validators.required]),
-    releasedAt: this.fb.control<string | null>(null),
+    title:       this.fb.nonNullable.control<string>('', [Validators.required, Validators.minLength(2)]),
+    platform:    this.fb.nonNullable.control<Platform>('PC', [Validators.required]),
+    genre:       this.fb.nonNullable.control<string>('', [Validators.required]),
+    price:       this.fb.nonNullable.control<number>(0, [Validators.required, Validators.min(0)]),
+    description: this.fb.nonNullable.control<string>('', [Validators.required]),
+    releasedAt:  this.fb.control<string | undefined>(undefined),
   });
 
   ngOnInit(): void {
@@ -108,7 +127,7 @@ export class AdminGamesPageComponent {
   }
 
   refresh(): void {
-    this.store.list().subscribe(items => this.games.set(items));
+    this.gamesSvc.list().subscribe(items => this.games.set(items));
   }
 
   startEdit(g: Game): void {
@@ -117,46 +136,52 @@ export class AdminGamesPageComponent {
       title: g.title,
       platform: g.platform,
       genre: g.genre,
-      releasedAt: g.releasedAt,
+      price: g.price,
+      description: g.description ?? '',           // fallback string
+      releasedAt: g.releasedAt ?? undefined,      // pas de null
     });
   }
 
   cancelEdit(): void {
     this.editingId.set(null);
-    this.form.reset({ title: '', platform: 'PC', genre: '', releasedAt: null });
+    this.form.reset({
+      title: '',
+      platform: 'PC',
+      genre: '',
+      price: 0,
+      description: '',
+      releasedAt: undefined
+    });
   }
 
   onSubmit(): void {
     if (this.form.invalid) return;
 
-    // Typage strict basé sur la signature du store
-    type CreateArg = Parameters<typeof this.store.create>[0];
-    type UpdateArg = Parameters<typeof this.store.update>[1];
-
     const raw = this.form.getRawValue();
-    const dtoBase = {
+    const dto: Omit<Game, 'id'> = {
       title: raw.title!.trim(),
       platform: raw.platform!,
       genre: raw.genre!.trim(),
-      releasedAt: raw.releasedAt && raw.releasedAt !== '' ? raw.releasedAt : null,
+      price: raw.price!,
+      description: raw.description!.trim(),
+      releasedAt: raw.releasedAt && raw.releasedAt !== '' ? raw.releasedAt : undefined, // <- undefined pas null
     };
 
-    if (this.editingId()) {
-      const dto: UpdateArg = dtoBase as UpdateArg;
-      this.store.update(this.editingId()!, dto).subscribe(() => {
+    if (this.editingId() !== null) {
+      // update: Partial<Omit<Game,'id'>> est compatible avec dto
+      this.gamesSvc.update(this.editingId()!, dto).subscribe(() => {
         this.cancelEdit();
         this.refresh();
       });
     } else {
-      const dto: CreateArg = dtoBase as CreateArg;
-      this.store.create(dto).subscribe(() => {
-        this.form.reset({ title: '', platform: 'PC', genre: '', releasedAt: null });
+      this.gamesSvc.create(dto).subscribe(() => {
+        this.cancelEdit();
         this.refresh();
       });
     }
   }
 
-  remove(id: string): void {
-    this.store.remove(id).subscribe(() => this.refresh());
+  remove(id: number): void {
+    this.gamesSvc.delete(id).subscribe(() => this.refresh());
   }
 }
