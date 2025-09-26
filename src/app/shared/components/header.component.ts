@@ -17,12 +17,22 @@ import { AuthService } from '../../features/auth/services/auth.service';
 
         <nav class="flex items-center gap-4">
           @if (isLoggedIn()) {
+            <!-- Lien vers espace utilisateur -->
+            <a
+              routerLink="/app"
+              routerLinkActive="underline underline-offset-4"
+              class="hover:underline underline-offset-4"
+              >Mon espace</a
+            >
+
+            <!-- Lien admin visible seulement si rôle admin -->
             @if (isAdmin()) {
               <a
                 routerLink="/admin"
                 routerLinkActive="underline underline-offset-4"
                 class="hover:underline underline-offset-4"
-                >Admin</a>
+                >Admin</a
+              >
             }
 
             <span class="text-sm text-gray-300 select-none">
@@ -38,8 +48,18 @@ import { AuthService } from '../../features/auth/services/auth.service';
               Logout
             </button>
           } @else {
-            <a routerLink="/auth/login" routerLinkActive="underline underline-offset-4" class="hover:underline underline-offset-4">Login</a>
-            <a routerLink="/auth/register" routerLinkActive="underline underline-offset-4" class="hover:underline underline-offset-4">Register</a>
+            <a
+              routerLink="/login"
+              routerLinkActive="underline underline-offset-4"
+              class="hover:underline underline-offset-4"
+              >Login</a
+            >
+            <a
+              routerLink="/register"
+              routerLinkActive="underline underline-offset-4"
+              class="hover:underline underline-offset-4"
+              >Register</a
+            >
           }
         </nav>
       </div>
@@ -57,6 +77,6 @@ export class HeaderComponent {
 
   async logout(): Promise<void> {
     this.auth.logout();
-    await this.router.navigate(['/auth/login']);
+    await this.router.navigate(['/login']);
   }
 }
