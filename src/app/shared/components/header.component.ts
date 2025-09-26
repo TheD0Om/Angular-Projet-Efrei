@@ -17,21 +17,26 @@ import { AuthService } from '../../features/auth/services/auth.service';
 
         <nav class="flex items-center gap-4">
           @if (isLoggedIn()) {
-            <!-- Lien vers espace utilisateur -->
-            <a
-              routerLink="/app"
-              routerLinkActive="underline underline-offset-4"
-              class="hover:underline underline-offset-4"
-              >Mon espace</a
-            >
-
-            <!-- Lien admin visible seulement si rôle admin -->
             @if (isAdmin()) {
               <a
                 routerLink="/admin"
                 routerLinkActive="underline underline-offset-4"
                 class="hover:underline underline-offset-4"
                 >Admin</a
+              >
+            } @else {
+              <!-- Lien réservé aux utilisateurs -->
+              <a
+                routerLink="/app"
+                routerLinkActive="underline underline-offset-4"
+                class="hover:underline underline-offset-4"
+                >Accueil</a
+              >
+              <a
+                routerLink="/app/catalog"
+                routerLinkActive="underline underline-offset-4"
+                class="hover:underline underline-offset-4"
+                >Catalogue</a
               >
             }
 
@@ -70,10 +75,11 @@ export class HeaderComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
-  // on lit directement les signals exposés par le service
-  readonly isLoggedIn   = computed(() => !!this.auth.currentUser$());
-  readonly isAdmin      = this.auth.isAdmin; // computed déjà dans le service
-  readonly currentEmail = computed(() => this.auth.currentUser$()?.email ?? '');
+  readonly isLoggedIn = computed(() => !!this.auth.currentUser$());
+  readonly isAdmin = this.auth.isAdmin;
+  readonly currentEmail = computed(
+    () => this.auth.currentUser$()?.email ?? ''
+  );
 
   async logout(): Promise<void> {
     this.auth.logout();

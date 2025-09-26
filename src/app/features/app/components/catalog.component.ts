@@ -1,6 +1,7 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+
 import { GamesService } from '../services/games.service';
 import { Game, Platform } from '../models/game.model';
 
@@ -9,112 +10,142 @@ import { Game, Platform } from '../models/game.model';
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <section class="mx-auto max-w-6xl px-4 py-8">
-      <div class="mb-6 flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900">Catalogue</h1>
-          <p class="text-gray-600">Parcourez les jeux et cliquez pour voir les détails.</p>
+    <div class="mx-auto max-w-6xl px-4 py-6">
+      <h1 class="text-2xl font-bold mb-4">Catalogue des jeux</h1>
+
+      <!-- Filtres -->
+      <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-6">
+        <div class="flex-1">
+          <input
+            class="w-full border rounded px-3 py-2"
+            type="text"
+            placeholder="Rechercher un jeu…"
+            (input)="onQuery($event)"
+          />
         </div>
 
-        <div class="flex items-center gap-2">
-          <input
-            type="text"
-            class="rounded-md border px-3 py-2 text-sm"
-            placeholder="Rechercher un titre…"
-            [value]="query()"
-            (input)="query.set(($event.target as HTMLInputElement).value)"
-          />
-
-          <select
-            class="rounded-md border px-3 py-2 text-sm"
-            [value]="platform()"
-            (change)="platform.set(($event.target as HTMLSelectElement).value as Platform | 'all')"
-          >
+        <div class="flex gap-3">
+          <select class="border rounded px-3 py-2" (change)="onPlatform($event)">
             <option value="all">Toutes plateformes</option>
-            @for (p of platforms; track p) {
-              <option [value]="p">{{ p }}</option>
-            }
+            <option value="PC">PC</option>
+            <option value="PlayStation">PlayStation</option>
+            <option value="Xbox">Xbox</option>
+            <option value="Switch">Switch</option>
           </select>
 
-          <select
-            class="rounded-md border px-3 py-2 text-sm"
-            [value]="sort()"
-            (change)="sort.set(($event.target as HTMLSelectElement).value as 'price-asc' | 'price-desc' | 'title')"
-          >
-            <option value="title">Trier: Titre</option>
-            <option value="price-asc">Prix: croissant</option>
-            <option value="price-desc">Prix: décroissant</option>
+          <select class="border rounded px-3 py-2" (change)="onSort($event)">
+            <option value="title">Trier par titre</option>
+            <option value="price-asc">Prix ↑</option>
+            <option value="price-desc">Prix ↓</option>
           </select>
         </div>
       </div>
 
       <!-- Liste -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        @for (g of filteredAndSorted(); track g.id) {
-          <article class="rounded-lg border p-4 hover:shadow-sm transition flex flex-col">
-            <div class="flex items-start justify-between">
-              <h3 class="font-medium">{{ g.title }}</h3>
-              <span class="text-xs rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">{{ g.platform }}</span>
-            </div>
+      @if (loading()) {
+        <p class="text-gray-500">Chargement…</p>
+      } @else {
+        @if (filtered().length === 0) {
+          <p class="text-gray-500">Aucun jeu ne correspond à votre recherche.</p>
+        } @else {
+          <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            @for (g of filtered(); track g.id) {
+              <div class="border rounded-lg p-4 bg-white shadow-sm">
+                <div class="flex items-start justify-between mb-2">
+                  <h2 class="font-semibold">{{ g.title }}</h2>
+                  <span class="text-xs rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ g.platform }}</span>
+                </div>
 
-            <p class="text-sm text-gray-500 mt-1">{{ g.genre }} • {{ g.releasedAt | date:'yyyy' }}</p>
-            <p class="mt-2 text-gray-700 line-clamp-3">{{ g.description || '—' }}</p>
+                @if (g.description) {
+                  <p class="text-sm text-gray-600 mb-3 line-clamp-3">{{ g.description }}</p>
+                }
 
-            <div class="mt-auto pt-4 flex items-center justify-between">
-              <span class="font-semibold">{{ g.price | number:'1.2-2' }} €</span>
-              <a
-                [routerLink]="['/app', 'game', g.id]"
-                class="rounded bg-gray-900 text-white px-3 py-1.5 text-sm hover:bg-black/80 transition"
-              >
-                Détails
-              </a>
-            </div>
-          </article>
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold">{{ g.price | number:'1.2-2' }} €</span>
+                  <a
+                    class="text-sm text-blue-600 hover:underline"
+                    [routerLink]="['/app/games', g.id]"
+                    >Détails</a>
+                </div>
+              </div>
+            }
+          </div>
         }
-      </div>
-
-      @if (filteredAndSorted().length === 0) {
-        <p class="text-gray-500 mt-8">Aucun jeu ne correspond à vos filtres.</p>
       }
-    </section>
+    </div>
   `,
 })
 export class CatalogComponent {
   private readonly games = inject(GamesService);
 
-  readonly platforms = this.games.platforms;
-
-  // états UI
-  readonly query = signal('');
+  // UI state
+  readonly query = signal<string>('');
   readonly platform = signal<Platform | 'all'>('all');
-  readonly sort = signal<'price-asc' | 'price-desc' | 'title'>('title');
+  readonly sort = signal<'title' | 'price-asc' | 'price-desc'>('title');
+  readonly loading = signal<boolean>(true);
 
-  // cache local des jeux
+  // Data
   readonly all = signal<Game[]>([]);
 
   constructor() {
-    // charge les jeux
-    this.games.list().subscribe(g => this.all.set(g));
+    // charge (mock) puis met fin au loading
+    this.games.list().subscribe({
+      next: (arr) => {
+        this.all.set(arr);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
   }
 
-  readonly filteredAndSorted = computed(() => {
-    let data = this.all();
+  // Vue filtrée + triée
+  readonly filtered = computed(() => {
+    const q = this.query().toLowerCase().trim();
+    const plat = this.platform();
+    const sort = this.sort();
 
-    // filtre titre
-    const q = this.query().trim().toLowerCase();
-    if (q) data = data.filter(d => d.title.toLowerCase().includes(q));
+    let list = this.all();
 
-    // filtre plateforme
-    const p = this.platform();
-    if (p !== 'all') data = data.filter(d => d.platform === p);
-
-    // tri
-    switch (this.sort()) {
-      case 'price-asc':  data = [...data].sort((a, b) => a.price - b.price); break;
-      case 'price-desc': data = [...data].sort((a, b) => b.price - a.price); break;
-      default:           data = [...data].sort((a, b) => a.title.localeCompare(b.title));
+    if (q) {
+      list = list.filter(
+        (g) =>
+          g.title.toLowerCase().includes(q) ||
+          (g.description ?? '').toLowerCase().includes(q) ||
+          (g.genre ?? '').toLowerCase().includes(q)
+      );
     }
 
-    return data;
+    if (plat !== 'all') {
+      list = list.filter((g) => g.platform === plat);
+    }
+
+    switch (sort) {
+      case 'price-asc':
+        list = [...list].sort((a, b) => a.price - b.price);
+        break;
+      case 'price-desc':
+        list = [...list].sort((a, b) => b.price - a.price);
+        break;
+      default:
+        list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return list;
   });
+
+  // Handlers d’inputs — évitent les expressions complexes dans le template
+  onQuery(ev: Event) {
+    const value = (ev.target as HTMLInputElement | null)?.value ?? '';
+    this.query.set(value);
+  }
+
+  onPlatform(ev: Event) {
+    const value = (ev.target as HTMLSelectElement | null)?.value as Platform | 'all';
+    this.platform.set(value);
+  }
+
+  onSort(ev: Event) {
+    const value = (ev.target as HTMLSelectElement | null)?.value as 'title' | 'price-asc' | 'price-desc';
+    this.sort.set(value);
+  }
 }
