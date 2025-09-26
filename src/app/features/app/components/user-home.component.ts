@@ -1,14 +1,14 @@
 import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { AuthService } from '../../../features/auth/services/auth.service';
+import { AuthService } from '../../auth/services/auth.service';
 
 type FeaturedGame = {
-  id: string;
+  id: number;
   title: string;
-  platform: 'PC' | 'PlayStation' | 'Xbox' | 'Switch';
+  platform: 'PC' | 'PS5' | 'Xbox' | 'Switch';
   price: number;
-  cover?: string;
+  cover?: string; // url d’image si tu veux plus tard
 };
 
 @Component({
@@ -16,91 +16,132 @@ type FeaturedGame = {
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <div class="mx-auto max-w-6xl px-4 py-8">
-      <!-- Header perso -->
-      <section class="mb-8">
-        <h1 class="text-2xl md:text-3xl font-semibold text-gray-900">
-          Bonjour {{ displayName() }} 👋
-        </h1>
-        <p class="text-gray-600 mt-1">
-          Bienvenue sur votre espace BoardHub. Parcourez les jeux et préparez vos achats.
-        </p>
-      </section>
-
-      <!-- Actions rapides -->
-      <section class="mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <a routerLink="/app"
-           class="rounded-lg border p-4 hover:shadow transition bg-white">
-          <div class="text-sm text-gray-500">Mon espace</div>
-          <div class="text-lg font-semibold">Accueil</div>
-          <p class="text-sm text-gray-500 mt-1">Résumé, jeux en vedette</p>
-        </a>
-
-        <a routerLink="/app/shop"
-           class="rounded-lg border p-4 hover:shadow transition bg-white">
-          <div class="text-sm text-gray-500">Boutique</div>
-          <div class="text-lg font-semibold">Acheter des jeux</div>
-          <p class="text-sm text-gray-500 mt-1">À venir</p>
-        </a>
-
-        <a routerLink="/app/purchases"
-           class="rounded-lg border p-4 hover:shadow transition bg-white">
-          <div class="text-sm text-gray-500">Mes achats</div>
-          <div class="text-lg font-semibold">Historique</div>
-          <p class="text-sm text-gray-500 mt-1">À venir</p>
-        </a>
-      </section>
-
-      <!-- Jeux en vedette (mock) -->
-      <section>
-        <h2 class="text-xl font-semibold text-gray-900 mb-4">Jeux en vedette</h2>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          @for (game of featured(); track game.id) {
-            <div class="rounded-lg border bg-white p-4 flex flex-col">
-              <div class="aspect-video bg-gray-100 mb-3 rounded overflow-hidden flex items-center justify-center">
-                <span class="text-gray-400 text-sm">Couverture</span>
-              </div>
-
-              <div class="flex-1">
-                <h3 class="font-semibold text-gray-900">{{ game.title }}</h3>
-                <p class="text-sm text-gray-500 mt-1">
-                  Plateforme : {{ game.platform }}
-                </p>
-              </div>
-
-              <div class="mt-4 flex items-center justify-between">
-                <span class="font-semibold">{{ game.price | currency:'EUR':'symbol':'1.2-2' }}</span>
-                <button
-                  type="button"
-                  class="rounded bg-emerald-600 text-white px-3 py-1.5 text-sm hover:bg-emerald-700 transition disabled:opacity-60"
-                  disabled
-                  aria-disabled="true"
-                  title="Disponible bientôt"
-                >
-                  Acheter
-                </button>
-              </div>
-            </div>
-          }
+    <section class="mx-auto max-w-6xl px-4 py-8">
+      <!-- Header de page -->
+      <div class="mb-8 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold text-gray-900">
+            Bonjour, {{ currentName() || 'Joueur' }} 👋
+          </h1>
+          <p class="text-gray-600">
+            Bienvenue sur votre espace BoardHub.
+          </p>
         </div>
-      </section>
-    </div>
+        <div class="flex gap-2">
+          <a
+            routerLink="/app"
+            class="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+          >
+            Rafraîchir
+          </a>
+          <a
+            routerLink="/admin"
+            *ngIf="isAdmin()"
+            class="rounded-md bg-gray-900 text-white px-3 py-1.5 text-sm hover:bg-black/80"
+          >
+            Admin
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+        <button
+          type="button"
+          class="rounded-lg border px-4 py-3 text-left hover:shadow transition"
+          (click)="openCatalogSoon()"
+        >
+          <div class="text-sm text-gray-500">Action rapide</div>
+          <div class="font-medium">Parcourir le catalogue</div>
+          <div class="text-xs text-gray-400 mt-1">Bientôt : filtres, recherche…</div>
+        </button>
+
+        <a
+          routerLink="/app"
+          class="rounded-lg border px-4 py-3 text-left hover:shadow transition"
+        >
+          <div class="text-sm text-gray-500">Action rapide</div>
+          <div class="font-medium">Mes achats</div>
+          <div class="text-xs text-gray-400 mt-1">Historique & factures (à venir)</div>
+        </a>
+
+        <a
+          routerLink="/app"
+          class="rounded-lg border px-4 py-3 text-left hover:shadow transition"
+        >
+          <div class="text-sm text-gray-500">Action rapide</div>
+          <div class="font-medium">Mes favoris</div>
+          <div class="text-xs text-gray-400 mt-1">Wishlist & recommandations</div>
+        </a>
+      </div>
+
+      <!-- Liste de jeux mis en avant -->
+      <h2 class="text-lg font-semibold mb-4">Jeux à la une</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        @for (game of featuredGames; track game.id) {
+          <div class="rounded-lg border p-4 hover:shadow-sm transition">
+            <div class="flex items-start justify-between">
+              <h3 class="font-medium">{{ game.title }}</h3>
+              <span class="text-xs rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+                {{ game.platform }}
+              </span>
+            </div>
+            <p class="mt-2 text-sm text-gray-600">
+              Prix : {{ game.price | number:'1.2-2' }} €
+            </p>
+
+            <div class="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded bg-emerald-600 text-white px-3 py-1.5 text-sm hover:bg-emerald-700 transition"
+                (click)="buySoon(game)"
+              >
+                Acheter
+              </button>
+              <button
+                type="button"
+                class="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 transition"
+                (click)="toggleFav(game)"
+              >
+                {{ isFav(game.id) ? 'Retirer des favoris' : 'Ajouter aux favoris' }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
   `,
 })
 export class UserHomeComponent {
   private readonly auth = inject(AuthService);
 
-  readonly displayName = computed(() => {
-    const u = this.auth.getCurrentUser();
-    return u?.name || u?.email || 'Utilisateur';
-    // si jamais name est vide, on retombe sur l’email
-  });
+  readonly currentName = computed(() => this.auth.currentUser$()?.name ?? '');
+  readonly isAdmin = this.auth.isAdmin;
 
-  // Mock “en vedette” (on branchera sur de vraies données plus tard)
-  readonly featured = computed<FeaturedGame[]>(() => [
-    { id: 'g1', title: 'Elden Ring', platform: 'PC', price: 59.99 },
-    { id: 'g2', title: 'Horizon Forbidden West', platform: 'PlayStation', price: 69.99 },
-    { id: 'g3', title: 'Forza Horizon 5', platform: 'Xbox', price: 49.99 },
-  ]);
+  // Mini store local pour la page d’accueil (on branchera sur un vrai service ensuite)
+  featuredGames: FeaturedGame[] = [
+    { id: 101, title: 'Star Odyssey',  platform: 'PC',   price: 49.99 },
+    { id: 102, title: 'Neo Street 5',  platform: 'PS5',  price: 69.99 },
+    { id: 103, title: 'Kingdom Forge', platform: 'Switch', price: 59.99 },
+  ];
+
+  private favIds = new Set<number>();
+
+  isFav(id: number): boolean {
+    return this.favIds.has(id);
+  }
+
+  toggleFav(game: FeaturedGame) {
+    if (this.favIds.has(game.id)) this.favIds.delete(game.id);
+    else this.favIds.add(game.id);
+  }
+
+  buySoon(game: FeaturedGame) {
+    // Placeholder achat — sera remplacé par le vrai flow d’achat
+    alert(`Achat (mock) de "${game.title}" — prochaine étape : panier + paiement`);
+  }
+
+  openCatalogSoon() {
+    alert('Bientôt : page catalogue avec recherche, filtres, pagination…');
+  }
 }
